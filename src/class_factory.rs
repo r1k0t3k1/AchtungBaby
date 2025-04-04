@@ -1,11 +1,10 @@
 use std::os::raw::c_void;
-
 use windows::Win32::{Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, S_OK}, System::{Com::{IClassFactory, IClassFactory_Impl}, Diagnostics::ClrProfiling::{ICorProfilerCallback, ICorProfilerCallback2}}, UI::WindowsAndMessaging::MessageBoxW};
 use windows_core::{
     implement, w, IUnknown, Interface, Ref, GUID, HSTRING
 };
 
-use crate::profiler::{ AchtungBabyProfiler, IAchtungBabyProfiler };
+use crate::{profiler::{ AchtungBabyProfiler, IAchtungBabyProfiler, IAchtungBabyProfiler_Impl }, util::Logger};
 
 #[implement(IClassFactory)]
 pub struct AchtungBabyClassFactory; 
@@ -29,11 +28,13 @@ impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
         }
 
         unsafe { 
-            profiler.query(riid, ppvobject).ok()
+            let r =profiler.query(riid, ppvobject);
+            Logger::log(r.message().as_str());
         }
+        Ok(())
     }
 
-    fn LockServer(&self, flock: windows_core::BOOL) -> windows_core::Result<()> {
+    fn LockServer(&self, _flock: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 }

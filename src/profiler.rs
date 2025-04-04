@@ -6,6 +6,8 @@ use windows::Win32::System::Diagnostics::ClrProfiling::{
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
 use std::cell::RefCell;
 
+use crate::util::Logger;
+
 // {5c8e9579-53b9-5a69-6a75-2d232518df35}
 pub const CLSID_PROFILER: GUID = GUID::from_values(
     0x5c8e9579,
@@ -17,13 +19,14 @@ pub const CLSID_PROFILER: GUID = GUID::from_values(
 // COM interface 実装サンプル
 // https://docs.rs/windows-core/latest/windows_core/attr.implement.html
 // ICorProfilerCallback2を実装していないとqueriInterfaceの際に「インターフェースがサポートされていません。」エラーになる
+// ICorProfilerCallbackのIID:  176FBED1-A55C-4796-98CA-A9DA0EF883E7
 // ICorProfilerCallback2のIID: 8A8CC829-CCF2-49fe-BBAE-0F022228071A
 #[implement(IAchtungBabyProfiler, ICorProfilerCallback, ICorProfilerCallback2)]
 pub struct AchtungBabyProfiler {
     profiler_info: RefCell<Option<ICorProfilerInfo>>,
 }
 
-#[interface("5c8e9579-53b9-5a69-6a75-2d232518df35")]
+#[interface("5c8e9579-53b9-5a69-6a75-2d232518df36")]
 pub unsafe trait IAchtungBabyProfiler: IUnknown {}
 
 impl IAchtungBabyProfiler_Impl for AchtungBabyProfiler_Impl {}
@@ -46,12 +49,7 @@ impl AchtungBabyProfiler {
 
 impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     fn Initialize(&self, picorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>) -> windows_core::Result<()> {
-        unsafe{MessageBoxW(
-            None,
-            w!("test"),
-            w!("Initialize called"),
-            Default::default(),
-        );}
+        Logger::log("abcdef");
         // 引数として渡ってくるICorProfilerInfoをIUnknown経由で取得する
         let profiler_info = picorprofilerinfounk.as_ref().unwrap();
         let interface = std::ptr::null_mut();
@@ -63,12 +61,12 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
             let queried_profiler_info = ICorProfilerInfo::from_raw(*interface);
             self.set(queried_profiler_info);
             let _ = self.profiler_info.borrow().as_ref().unwrap().SetEventMask(0x8);
-                MessageBoxW(
-                    None,
-                    w!("test"),
-                    w!("SetEventMask called"),
-                    Default::default(),
-                );
+            MessageBoxW(
+                None,
+                w!("test"),
+                w!("SetEventMask called"),
+                Default::default(),
+            );
         };
         Ok(())
     }
