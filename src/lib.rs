@@ -11,6 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
 use core::ffi::c_void;
 
 mod profiler;
+mod ClassFactory;
 
 // DLLロード時は特に何もしなくていい
 #[no_mangle]
