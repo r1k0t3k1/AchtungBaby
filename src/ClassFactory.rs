@@ -25,6 +25,7 @@ impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
         if profiler.is_none() {
             return Err(windows_core::Error::from_hresult(E_FAIL));
         }
+
         todo!()
     }
 
