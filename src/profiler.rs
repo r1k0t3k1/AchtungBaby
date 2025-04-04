@@ -5,12 +5,10 @@ use windows::Win32::System::Diagnostics::ClrProfiling::{
     ICorProfilerCallback_Impl, ICorProfilerInfo, COR_PRF_MONITOR_ASSEMBLY_LOADS,
 };
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
-use core::ffi::c_void;
 use std::cell::RefCell;
-use std::mem;
 
 // {5c8e9579-53b9-5a69-6a75-2d232518df35}
-const CLSID_PROFILER: GUID = GUID::from_values(
+pub const CLSID_PROFILER: GUID = GUID::from_values(
     0x5c8e9579,
     0x53b9,
     0x5a69,
@@ -20,36 +18,50 @@ const CLSID_PROFILER: GUID = GUID::from_values(
 // COM interface 実装サンプル
 // https://docs.rs/windows-core/latest/windows_core/attr.implement.html
 #[interface("5c8e9579-53b9-5a69-6a75-2d232518df35")]
-unsafe trait IAchtungBabyProfiler: IUnknown {
-    pub fn set(&self, value: ICorProfilerInfo); 
-}
+pub unsafe trait IAchtungBabyProfiler: IUnknown {
+} 
 
-#[implement(IAchtungBabyProfiler,ICorProfilerCallback)]
+#[implement(ICorProfilerCallback, IAchtungBabyProfiler)]
 pub struct AchtungBabyProfiler {
     profiler_info: RefCell<Option<ICorProfilerInfo>>,
 }
 
 impl AchtungBabyProfiler {
     pub fn new() -> Self {
+        unsafe {
+            MessageBoxW(
+                None,
+                w!("test"),
+                w!("AchtungBabyProfiler constructed"),
+                Default::default(),
+            );
+        }
         Self {
             profiler_info: RefCell::new(None),
         }
     }
 
+    pub unsafe fn set(&self,value:ICorProfilerInfo) {
+        let mut info = self.profiler_info.borrow_mut();
+        *info = Some(value);
+    }
     pub fn is_none(&self) -> bool {
         self.profiler_info.borrow().is_none()
     }
 }
 
-impl IAchtungBabyProfiler_Impl for AchtungBabyProfiler_Impl {
-    unsafe fn set(&self,value:ICorProfilerInfo) {
-        let mut info = self.profiler_info.borrow_mut();
-        *info = Some(value);
-    }
-}
+impl IAchtungBabyProfiler_Impl for AchtungBabyProfiler_Impl {}
 
 impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     fn Initialize(&self, picorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>) -> windows_core::Result<()> {
+        unsafe {
+            MessageBoxW(
+                None,
+                w!("test"),
+                w!("AchtungBabyProfiler constructed"),
+                Default::default(),
+            );
+        }
         // 引数として渡ってくるICorProfilerInfoをIUnknown経由で取得する
         let profiler_info = picorprofilerinfounk.as_ref().unwrap();
         let interface = std::ptr::null_mut();

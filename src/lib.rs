@@ -1,6 +1,8 @@
+use profiler::CLSID_PROFILER;
 use windows::Win32::Foundation::{
-    E_INVALIDARG, E_POINTER, HMODULE, HWND, S_OK
+    CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, HMODULE, HWND, S_OK
 };
+use windows::Win32::System::Com::IClassFactory;
 use windows::Win32::System::SystemServices::{
     DLL_PROCESS_ATTACH,
     DLL_PROCESS_DETACH,
@@ -8,6 +10,8 @@ use windows::Win32::System::SystemServices::{
 //use windows::Win32::System::Com::*;
 use windows::core::{HRESULT, GUID, w};
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
+use windows_core::Interface;
+use ClassFactory::AchtungBabyClassFactory;
 use core::ffi::c_void;
 
 mod profiler;
@@ -51,14 +55,22 @@ extern "stdcall" fn DllGetClassObject(
     rclsid: *const GUID,
     riid: *const GUID,
     ppv: *mut c_void,
-) -> HRESULT {
+) -> HRESULT {      
     if ppv.is_null() {
         return E_POINTER;
     }
     if rclsid.is_null() || riid.is_null() {
         return E_INVALIDARG
     }
-    S_OK
+
+    let clsid = unsafe { *rclsid };
+    let iid: GUID = unsafe { *riid };
+    if clsid != CLSID_PROFILER || iid != IClassFactory::IID {
+        return CLASS_E_CLASSNOTAVAILABLE;
+    }
+
+    let factory: IClassFactory = AchtungBabyClassFactory.into();
+    unsafe { factory.query(riid, ppv as *mut *mut c_void) }
 }
 
 // 常にDLLアンロードを許可
