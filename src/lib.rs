@@ -10,7 +10,7 @@ use windows::Win32::System::SystemServices::{
 //use windows::Win32::System::Com::*;
 use windows::core::{HRESULT, GUID, w};
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
-use windows_core::Interface;
+use windows_core::{Interface, HSTRING};
 use ClassFactory::AchtungBabyClassFactory;
 use core::ffi::c_void;
 
@@ -69,8 +69,10 @@ extern "stdcall" fn DllGetClassObject(
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
-    let factory: IClassFactory = AchtungBabyClassFactory.into();
-    unsafe { factory.query(riid, ppv as *mut *mut c_void) }
+    let factory: IClassFactory = AchtungBabyClassFactory::new().into();
+    unsafe { 
+        factory.query(riid, ppv as *mut *mut c_void)
+    }
 }
 
 // 常にDLLアンロードを許可
