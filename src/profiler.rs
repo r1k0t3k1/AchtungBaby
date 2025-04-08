@@ -1,12 +1,11 @@
+use std::sync::OnceLock;
+
 use windows::core::*;
-use windows::Win32::Foundation::E_FAIL;
+use windows::Win32::Foundation::E_UNEXPECTED;
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback,ICorProfilerCallback2, ICorProfilerCallback_Impl, ICorProfilerCallback2_Impl,ICorProfilerInfo, COR_PRF_MONITOR_ASSEMBLY_LOADS
+    ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_MONITOR_ASSEMBLY_LOADS
 };
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
-use std::cell::RefCell;
-
-use crate::util::Logger;
 
 // {5c8e9579-53b9-5a69-6a75-2d232518df35}
 pub const CLSID_PROFILER: GUID = GUID::from_values(
@@ -23,54 +22,41 @@ pub const CLSID_PROFILER: GUID = GUID::from_values(
 // ICorProfilerCallback2のIID: 8A8CC829-CCF2-49fe-BBAE-0F022228071A
 #[implement(ICorProfilerCallback2)]
 pub struct AchtungBabyProfiler {
-    //profiler_info: RefCell<Option<ICorProfilerInfo>>,
+    profiler_info: OnceLock<ICorProfilerInfo3>,
 }
 
 impl AchtungBabyProfiler {
     pub fn new() -> Self {
-        println!("AchtungBabyProfiler constructed");
-        Self {
-            //profiler_info: RefCell::new(None),
-        }
+        Self { profiler_info: OnceLock::new() }
     }
 
-    //pub unsafe fn set(&self,value:ICorProfilerInfo) {
-    //    let mut info = self.profiler_info.borrow_mut();
-    //    *info = Some(value);
-    //}
-    //pub fn is_none(&self) -> bool {
-    //    self.profiler_info.borrow().is_none()
-    //}
+    fn set_profiler_info(&self, value: ICorProfilerInfo3) -> windows_core::Result<()> {
+        self.profiler_info.set(value)
+            .map_err(|_| windows_core::Error::new(
+                E_UNEXPECTED,
+                "Assignment of ICorProfilerInfo to a global variable failed."
+            )
+        )
+    }
+
+    fn get_profiler_info(&self) -> Option<&ICorProfilerInfo3> {
+        self.profiler_info.get()
+    }
 }
 
 impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     fn Initialize(&self, picorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>) -> windows_core::Result<()> {
-        unsafe {
-            MessageBoxW(
-                None,
-                w!("test"),
-                w!("SetEventMask test"),
-                Default::default(),
-            );
-        }
+        println!("[+] ICorProfilerCallback::Initialize");
         // 引数として渡ってくるICorProfilerInfoをIUnknown経由で取得する
-        let profiler_info = picorprofilerinfounk.as_ref().unwrap();
-        let interface = std::ptr::null_mut();
-        unsafe {
-            let result = profiler_info.query(&ICorProfilerInfo::IID as *const GUID, interface);
-            if result.is_err() {
-                return Err(windows_core::Error::from_hresult(E_FAIL));
-            }
-            let queried_profiler_info = ICorProfilerInfo::from_raw(*interface);
-            //self.set(queried_profiler_info);
-            //let _ = self.profiler_info.borrow().as_ref().unwrap().SetEventMask(0x8);
-            MessageBoxW(
-                None,
-                w!("test"),
-                w!("SetEventMask called"),
-                Default::default(),
-            );
-        };
+        let profiler_info = picorprofilerinfounk.unwrap();
+        println!("[+] ICorProfilerInfo: {:?}", profiler_info);
+
+        self.set_profiler_info(profiler_info.cast::<ICorProfilerInfo3>()?)?;
+
+        println!("[+] get ICorProfilerInfo");
+        unsafe { self.get_profiler_info().unwrap().SetEventMask(COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32)? };
+
+        println!("[+] ICorProfilerInfo::SetEventMask");
         Ok(())
     }
 
@@ -81,111 +67,119 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn AppDomainCreationStarted(&self, appdomainid: usize) -> windows_core::Result<()> {
+    fn AppDomainCreationStarted(&self, _appdomainid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AppDomainCreationFinished(&self, appdomainid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn AppDomainCreationFinished(&self, _appdomainid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AppDomainShutdownStarted(&self, appdomainid: usize) -> windows_core::Result<()> {
+    fn AppDomainShutdownStarted(&self, _appdomainid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AppDomainShutdownFinished(&self, appdomainid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn AppDomainShutdownFinished(&self, _appdomainid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AssemblyLoadStarted(&self, assemblyid: usize) -> windows_core::Result<()> {
+    fn AssemblyLoadStarted(&self, __assemblyid: usize) -> windows_core::Result<()> {
+            unsafe {
+        MessageBoxW(
+            None,
+            w!("test"),
+            w!("title"),
+            Default::default(),
+        );
+    }
         Ok(())
     }
 
-    fn AssemblyLoadFinished(&self, assemblyid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn AssemblyLoadFinished(&self, _assemblyid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AssemblyUnloadStarted(&self, assemblyid: usize) -> windows_core::Result<()> {
+    fn AssemblyUnloadStarted(&self, _assemblyid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn AssemblyUnloadFinished(&self, assemblyid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn AssemblyUnloadFinished(&self, _assemblyid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ModuleLoadStarted(&self, moduleid: usize) -> windows_core::Result<()> {
+    fn ModuleLoadStarted(&self, _moduleid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ModuleLoadFinished(&self, moduleid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn ModuleLoadFinished(&self, _moduleid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ModuleUnloadStarted(&self, moduleid: usize) -> windows_core::Result<()> {
+    fn ModuleUnloadStarted(&self, _moduleid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ModuleUnloadFinished(&self, moduleid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn ModuleUnloadFinished(&self, _moduleid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ModuleAttachedToAssembly(&self, moduleid: usize, assemblyid: usize) -> windows_core::Result<()> {
+    fn ModuleAttachedToAssembly(&self, _moduleid: usize, _assemblyid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ClassLoadStarted(&self, classid: usize) -> windows_core::Result<()> {
+    fn ClassLoadStarted(&self, _classid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ClassLoadFinished(&self, classid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn ClassLoadFinished(&self, _classid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ClassUnloadStarted(&self, classid: usize) -> windows_core::Result<()> {
+    fn ClassUnloadStarted(&self, _classid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ClassUnloadFinished(&self, classid: usize, hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn ClassUnloadFinished(&self, _classid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn FunctionUnloadStarted(&self, functionid: usize) -> windows_core::Result<()> {
+    fn FunctionUnloadStarted(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn JITCompilationStarted(&self, functionid: usize, fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+    fn JITCompilationStarted(&self, _functionid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn JITCompilationFinished(&self, functionid: usize, hrstatus: windows_core::HRESULT, fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+    fn JITCompilationFinished(&self, _functionid: usize, _hrstatus: windows_core::HRESULT, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn JITCachedFunctionSearchStarted(&self, functionid: usize) -> windows_core::Result<windows_core::BOOL> {
+    fn JITCachedFunctionSearchStarted(&self, _functionid: usize) -> windows_core::Result<windows_core::BOOL> {
         Ok(true.into())
     }
 
-    fn JITCachedFunctionSearchFinished(&self, functionid: usize, result: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_JIT_CACHE) -> windows_core::Result<()> {
+    fn JITCachedFunctionSearchFinished(&self, _functionid: usize, _result: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_JIT_CACHE) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn JITFunctionPitched(&self, functionid: usize) -> windows_core::Result<()> {
+    fn JITFunctionPitched(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn JITInlining(&self, callerid: usize, calleeid: usize) -> windows_core::Result<windows_core::BOOL> {
+    fn JITInlining(&self, _callerid: usize, _calleeid: usize) -> windows_core::Result<windows_core::BOOL> {
         Ok(true.into())
     }
 
-    fn ThreadCreated(&self, threadid: usize) -> windows_core::Result<()> {
+    fn ThreadCreated(&self, _threadid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ThreadDestroyed(&self, threadid: usize) -> windows_core::Result<()> {
+    fn ThreadDestroyed(&self, _threadid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ThreadAssignedToOSThread(&self, managedthreadid: usize, osthreadid: u32) -> windows_core::Result<()> {
+    fn ThreadAssignedToOSThread(&self, _managed_threadid: usize, _os_threadid: u32) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -193,11 +187,11 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn RemotingClientSendingMessage(&self, pcookie: *const windows_core::GUID, fisasync: windows_core::BOOL) -> windows_core::Result<()> {
+    fn RemotingClientSendingMessage(&self, _pcookie: *const windows_core::GUID, _fisasync: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn RemotingClientReceivingReply(&self, pcookie: *const windows_core::GUID, fisasync: windows_core::BOOL) -> windows_core::Result<()> {
+    fn RemotingClientReceivingReply(&self, _pcookie: *const windows_core::GUID, _fisasync: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -205,7 +199,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn RemotingServerReceivingMessage(&self, pcookie: *const windows_core::GUID, fisasync: windows_core::BOOL) -> windows_core::Result<()> {
+    fn RemotingServerReceivingMessage(&self, _pcookie: *const windows_core::GUID, _fisasync: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -217,19 +211,19 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn RemotingServerSendingReply(&self, pcookie: *const windows_core::GUID, fisasync: windows_core::BOOL) -> windows_core::Result<()> {
+    fn RemotingServerSendingReply(&self, _pcookie: *const windows_core::GUID, _fisasync: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn UnmanagedToManagedTransition(&self, functionid: usize, reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_TRANSITION_REASON) -> windows_core::Result<()> {
+    fn UnmanagedToManagedTransition(&self, _functionid: usize, __reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_TRANSITION_REASON) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ManagedToUnmanagedTransition(&self, functionid: usize, reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_TRANSITION_REASON) -> windows_core::Result<()> {
+    fn ManagedToUnmanagedTransition(&self, _functionid: usize, __reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_TRANSITION_REASON) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn RuntimeSuspendStarted(&self, suspendreason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_SUSPEND_REASON) -> windows_core::Result<()> {
+    fn RuntimeSuspendStarted(&self, _suspend_reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_SUSPEND_REASON) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -249,39 +243,39 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn RuntimeThreadSuspended(&self, threadid: usize) -> windows_core::Result<()> {
+    fn RuntimeThreadSuspended(&self, _threadid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn RuntimeThreadResumed(&self, threadid: usize) -> windows_core::Result<()> {
+    fn RuntimeThreadResumed(&self, _threadid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn MovedReferences(&self, cmovedobjectidranges: u32, oldobjectidrangestart: *const usize, newobjectidrangestart: *const usize, cobjectidrangelength: *const u32) -> windows_core::Result<()> {
+    fn MovedReferences(&self, _cmoved_objectidranges: u32, _old_objectidrangestart: *const usize, _new_objectidrangestart: *const usize, _c_objectidrangelength: *const u32) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ObjectAllocated(&self, objectid: usize, classid: usize) -> windows_core::Result<()> {
+    fn ObjectAllocated(&self, __objectid: usize, _classid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ObjectsAllocatedByClass(&self, cclasscount: u32, classids: *const usize, cobjects: *const u32) -> windows_core::Result<()> {
+    fn ObjectsAllocatedByClass(&self, _cclasscount: u32, _classids: *const usize, _cobjects: *const u32) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ObjectReferences(&self, objectid: usize, classid: usize, cobjectrefs: u32, objectrefids: *const usize) -> windows_core::Result<()> {
+    fn ObjectReferences(&self, __objectid: usize, _classid: usize, _cobjectrefs: u32, _objectrefids: *const usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn RootReferences(&self, crootrefs: u32, rootrefids: *const usize) -> windows_core::Result<()> {
+    fn RootReferences(&self, _crootrefs: u32, _rootrefids: *const usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ExceptionThrown(&self, thrownobjectid: usize) -> windows_core::Result<()> {
+    fn ExceptionThrown(&self, _thrown_objectid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn ExceptionSearchFunctionEnter(&self, functionid: usize) -> windows_core::Result<()> {
+    fn ExceptionSearchFunctionEnter(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -289,7 +283,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn ExceptionSearchFilterEnter(&self, functionid: usize) -> windows_core::Result<()> {
+    fn ExceptionSearchFilterEnter(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -297,7 +291,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn ExceptionSearchCatcherFound(&self, functionid: usize) -> windows_core::Result<()> {
+    fn ExceptionSearchCatcherFound(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -309,7 +303,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn ExceptionUnwindFunctionEnter(&self, functionid: usize) -> windows_core::Result<()> {
+    fn ExceptionUnwindFunctionEnter(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -317,7 +311,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn ExceptionUnwindFinallyEnter(&self, functionid: usize) -> windows_core::Result<()> {
+    fn ExceptionUnwindFinallyEnter(&self, _functionid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -325,7 +319,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn ExceptionCatcherEnter(&self, functionid: usize, objectid: usize) -> windows_core::Result<()> {
+    fn ExceptionCatcherEnter(&self, _functionid: usize, _objectid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -333,11 +327,11 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn COMClassicVTableCreated(&self, wrappedclassid: usize, implementediid: *const windows_core::GUID, pvtable: *const core::ffi::c_void, cslots: u32) -> windows_core::Result<()> {
+    fn COMClassicVTableCreated(&self, _wrapped_classid: usize, _implementediid: *const windows_core::GUID, _pvtable: *const core::ffi::c_void, _cslots: u32) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn COMClassicVTableDestroyed(&self, wrappedclassid: usize, implementediid: *const windows_core::GUID, pvtable: *const core::ffi::c_void) -> windows_core::Result<()> {
+    fn COMClassicVTableDestroyed(&self, _wrapped_classid: usize, _implementediid: *const windows_core::GUID, _pvtable: *const core::ffi::c_void) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -352,15 +346,15 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
 
 
 impl ICorProfilerCallback2_Impl for AchtungBabyProfiler_Impl {
-    fn ThreadNameChanged(&self, threadid: usize, cchname: u32, name: &windows_core::PCWSTR) -> windows_core::Result<()> {
+    fn ThreadNameChanged(&self, _threadid: usize, _cchname: u32, _name: &windows_core::PCWSTR) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn GarbageCollectionStarted(&self, cgenerations: i32, generationcollected: *const windows_core::BOOL, reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_REASON) -> windows_core::Result<()> {
+    fn GarbageCollectionStarted(&self, cgenerations: i32, generationcollected: *const windows_core::BOOL, _reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_REASON) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn SurvivingReferences(&self, csurvivingobjectidranges: u32, objectidrangestart: *const usize, cobjectidrangelength: *const u32) -> windows_core::Result<()> {
+    fn SurvivingReferences(&self, _csurvivingobjectidranges: u32, _objectidrangestart: *const usize, _cobjectidrangelength: *const u32) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -368,19 +362,19 @@ impl ICorProfilerCallback2_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn FinalizeableObjectQueued(&self, finalizerflags: u32, objectid: usize) -> windows_core::Result<()> {
+    fn FinalizeableObjectQueued(&self, _finalizerflags: u32, _objectid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn RootReferences2(&self, crootrefs: u32, rootrefids: *const usize, rootkinds: *const windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_ROOT_KIND, rootflags: *const windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_ROOT_FLAGS, rootids: *const usize) -> windows_core::Result<()> {
+    fn RootReferences2(&self, _crootrefs: u32, _rootrefids: *const usize, _rootkinds: *const windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_ROOT_KIND, _rootflags: *const windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_ROOT_FLAGS, _rootids: *const usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn HandleCreated(&self, handleid: usize, initialobjectid: usize) -> windows_core::Result<()> {
+    fn HandleCreated(&self, _handleid: usize, _initialobjectid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
-    fn HandleDestroyed(&self, handleid: usize) -> windows_core::Result<()> {
+    fn HandleDestroyed(&self, _handleid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 }
