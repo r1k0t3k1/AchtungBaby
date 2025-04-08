@@ -1,37 +1,48 @@
-use std::os::raw::c_void;
-use windows::Win32::{Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, S_OK}, System::{Com::{IClassFactory, IClassFactory_Impl}, Diagnostics::ClrProfiling::{ICorProfilerCallback, ICorProfilerCallback2}}, UI::WindowsAndMessaging::MessageBoxW};
+use std::{mem, os::raw::c_void, ptr};
+use windows::Win32::{Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER, S_OK}, System::{Com::{IClassFactory, IClassFactory_Impl}, Diagnostics::ClrProfiling::{ICorProfilerCallback, ICorProfilerCallback2}}, UI::WindowsAndMessaging::MessageBoxW};
 use windows_core::{
-    implement, w, IUnknown, Interface, Ref, GUID, HSTRING
+    implement, w, ComObjectInner, ComObjectInterface, IUnknown, Interface, Ref, GUID, HSTRING
 };
 
-use crate::{profiler::{ AchtungBabyProfiler, IAchtungBabyProfiler, IAchtungBabyProfiler_Impl }, util::Logger};
+use crate::{profiler::{self, AchtungBabyProfiler, AchtungBabyProfiler_Impl}, util::Logger};
 
 #[implement(IClassFactory)]
-pub struct AchtungBabyClassFactory; 
-
-impl AchtungBabyClassFactory {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+pub struct AchtungBabyClassFactory {}
 
 impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
     fn CreateInstance(&self, punkouter: Ref<'_, IUnknown>, riid: *const GUID, ppvobject: *mut *mut c_void) -> windows_core::Result<()> {
-        if !punkouter.is_null() {
-            unsafe { *ppvobject = std::ptr::null_mut() };
-            return Err(windows_core::Error::from_hresult(CLASS_E_NOAGGREGATION));
+        if punkouter.is_some() {
+            return Err(CLASS_E_NOAGGREGATION.into());
         }
-        
-        let profiler: IAchtungBabyProfiler = AchtungBabyProfiler::new().into();
+        if ppvobject.is_null() {
+            return Err(E_POINTER.into());
+        }
+
+        unsafe { *ppvobject = ptr::null_mut() };
+
+        if riid.is_null() {
+            return Err(E_INVALIDARG.into());
+        }
+        let riid = unsafe { *riid };
+        println!("CreateInstance IID={:?}", riid);
+
+        if riid != ICorProfilerCallback::IID && riid != ICorProfilerCallback2::IID {
+            return Err(E_NOINTERFACE.into());
+        } 
+        let profiler = ICorProfilerCallback2::from(AchtungBabyProfiler::new());
         if profiler.as_raw().is_null() {
             return Err(windows_core::Error::from_hresult(E_FAIL));
         }
 
         unsafe { 
-            let r =profiler.query(riid, ppvobject);
-            Logger::log(r.message().as_str());
+            let result = profiler.query(&riid, ppvobject);
+            match result.is_ok() {
+                true => println!("AchtungBabyProfiler query succeeded: {:?}", result.message()),
+                false =>println!("AchtungBabyProfiler query failed: {:?}", result.message()),
+            }
+            //unsafe { ICorProfilerCallback2::from_raw(*ppvobject).Initialize(None);}
+            result.ok()
         }
-        Ok(())
     }
 
     fn LockServer(&self, _flock: windows_core::BOOL) -> windows_core::Result<()> {
