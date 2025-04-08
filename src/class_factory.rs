@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, ptr};
-use windows::Win32::{Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER}, System::{Com::{IClassFactory, IClassFactory_Impl}, Diagnostics::ClrProfiling::{ICorProfilerCallback, ICorProfilerCallback2}}};
+use windows::Win32::{Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER}, System::{Com::{IClassFactory, IClassFactory_Impl}, Diagnostics::ClrProfiling::{ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback5}}};
 use windows_core::{
     implement, IUnknown, Interface, Ref, GUID
 };
@@ -32,7 +32,7 @@ impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
             return Err(E_NOINTERFACE.into());
         } 
 
-        let profiler = ICorProfilerCallback2::from(AchtungBabyProfiler::new());
+        let profiler = ICorProfilerCallback5::from(AchtungBabyProfiler::new());
 
         if profiler.as_raw().is_null() {
             return Err(windows_core::Error::from_hresult(E_FAIL));

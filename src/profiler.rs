@@ -3,7 +3,18 @@ use std::sync::OnceLock;
 use windows::core::*;
 use windows::Win32::Foundation::E_UNEXPECTED;
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_MONITOR_ASSEMBLY_LOADS
+    ICorProfilerCallback,
+    ICorProfilerCallback2, 
+    ICorProfilerCallback3, 
+    ICorProfilerCallback4, 
+    ICorProfilerCallback5, 
+    ICorProfilerCallback_Impl, 
+    ICorProfilerCallback2_Impl, 
+    ICorProfilerCallback3_Impl, 
+    ICorProfilerCallback4_Impl, 
+    ICorProfilerCallback5_Impl, 
+    ICorProfilerInfo3, 
+    COR_PRF_MONITOR_ASSEMBLY_LOADS
 };
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
@@ -20,7 +31,13 @@ pub const CLSID_PROFILER: GUID = GUID::from_values(
 // ICorProfilerCallback2を実装していないとqueriInterfaceの際に「インターフェースがサポートされていません。」エラーになる
 // ICorProfilerCallbackのIID:  176FBED1-A55C-4796-98CA-A9DA0EF883E7
 // ICorProfilerCallback2のIID: 8A8CC829-CCF2-49fe-BBAE-0F022228071A
-#[implement(ICorProfilerCallback2)]
+#[implement(
+    ICorProfilerCallback5,
+    ICorProfilerCallback4,
+    ICorProfilerCallback3,
+    ICorProfilerCallback2,
+    ICorProfilerCallback,
+)]
 pub struct AchtungBabyProfiler {
     profiler_info: OnceLock<ICorProfilerInfo3>,
 }
@@ -350,7 +367,7 @@ impl ICorProfilerCallback2_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn GarbageCollectionStarted(&self, cgenerations: i32, generationcollected: *const windows_core::BOOL, _reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_REASON) -> windows_core::Result<()> {
+    fn GarbageCollectionStarted(&self, _cgenerations: i32, _generationcollected: *const windows_core::BOOL, _reason: windows::Win32::System::Diagnostics::ClrProfiling::COR_PRF_GC_REASON) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -375,6 +392,51 @@ impl ICorProfilerCallback2_Impl for AchtungBabyProfiler_Impl {
     }
 
     fn HandleDestroyed(&self, _handleid: usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback3_Impl for AchtungBabyProfiler_Impl {
+    fn InitializeForAttach(&self, _pcorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>, _pvclientdata: *const core::ffi::c_void, _cbclientdata: u32) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn ProfilerAttachComplete(&self) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn ProfilerDetachSucceeded(&self) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback4_Impl for AchtungBabyProfiler_Impl {
+    fn ReJITCompilationStarted(&self, _functionid: usize, _rejitid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn GetReJITParameters(&self, _moduleid: usize, _methodid: u32, _pfunctioncontrol: windows_core::Ref<'_, windows::Win32::System::Diagnostics::ClrProfiling::ICorProfilerFunctionControl>) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn ReJITCompilationFinished(&self, _functionid: usize, _rejitid: usize, _hrstatus: windows_core::HRESULT, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn ReJITError(&self, _moduleid: usize, _methodid: u32, _functionid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn MovedReferences2(&self, _cmovedobjectidranges: u32, _oldobjectidrangestart: *const usize, _newobjectidrangestart: *const usize, _cobjectidrangelength: *const usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn SurvivingReferences2(&self, _csurvivingobjectidranges: u32, _objectidrangestart: *const usize, _cobjectidrangelength: *const usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+impl ICorProfilerCallback5_Impl for AchtungBabyProfiler_Impl {
+    fn ConditionalWeakTableElementReferences(&self, _crootrefs: u32, _keyrefids: *const usize, _valuerefids: *const usize, _rootids: *const usize) -> windows_core::Result<()> {
         Ok(())
     }
 }
