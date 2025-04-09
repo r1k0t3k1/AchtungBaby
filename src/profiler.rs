@@ -1,22 +1,12 @@
 use std::sync::OnceLock;
 
 use windows::core::*;
-use windows::Win32::Foundation::E_UNEXPECTED;
+use windows::Win32::Foundation::{E_UNEXPECTED, MAX_PATH};
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback,
-    ICorProfilerCallback2, 
-    ICorProfilerCallback3, 
-    ICorProfilerCallback4, 
-    ICorProfilerCallback5, 
-    ICorProfilerCallback_Impl, 
-    ICorProfilerCallback2_Impl, 
-    ICorProfilerCallback3_Impl, 
-    ICorProfilerCallback4_Impl, 
-    ICorProfilerCallback5_Impl, 
-    ICorProfilerInfo3, 
-    COR_PRF_MONITOR_ASSEMBLY_LOADS
+    ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
 };
-use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
+use windows::Win32::System::Diagnostics::Debug::MAX_SYM_NAME;
+use windows::Win32::System::WinRT::Metadata::{IMetaDataImport2, IMAGE_COR_ILMETHOD, IMAGE_COR_ILMETHOD_FAT};
 
 // {5c8e9579-53b9-5a69-6a75-2d232518df35}
 pub const CLSID_PROFILER: GUID = GUID::from_values(
@@ -71,7 +61,11 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         self.set_profiler_info(profiler_info.cast::<ICorProfilerInfo3>()?)?;
 
         println!("[+] get ICorProfilerInfo");
-        unsafe { self.get_profiler_info().unwrap().SetEventMask(COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32)? };
+        unsafe { self.get_profiler_info().unwrap().SetEventMask(
+            COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32 | // アセンブリの読み込み通知を購読
+            COR_PRF_MONITOR_JIT_COMPILATION.0 as u32 |         // JITの開始通知を購読
+            COR_PRF_USE_PROFILE_IMAGES.0 as u32                // NGENにより予めJITコンパイルされたライブラリにおいてもJITコンパイルさせる
+        )? };
 
         println!("[+] ICorProfilerInfo::SetEventMask");
         Ok(())
@@ -81,6 +75,172 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         ("shutdown called");
         // ICorProfilerInfoの解放
         //*self.profiler_info.borrow_mut() = None;
+        Ok(())
+    }
+
+    fn JITCompilationStarted(&self, functionid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        let mut ppimport:Option<IUnknown> = None; 
+        let mut ptoken = 0_u32;  // GetMethodPropsに渡すようのメタデータトークン
+        unsafe {
+            // functionidで指定した関数のメタデータとIMetaDataImportインターフェースを取得する
+            // https://learn.microsoft.com/ja-jp/dotnet/framework/unmanaged-api/profiling/icorprofilerinfo-gettokenandmetadatafromfunction-method
+            self.get_profiler_info().unwrap().GetTokenAndMetaDataFromFunction(
+                functionid,
+                &IMetaDataImport2::IID,
+                &mut ppimport,
+                &mut ptoken
+            )?;
+        }
+
+        // IMetaDataImport2
+        // https://learn.microsoft.com/ja-jp/windows/win32/api/rometadataapi/nn-rometadataapi-imetadataimport2
+        // GetTokenAndMetaDataFromFunctionで取得できるのはIUnknownなのでcast(QueryInterface)を使用してIMetaDataImport2に変換する
+        let pimport = ppimport.unwrap().cast::<IMetaDataImport2>()?;
+
+        let mut pclass = 0_u32;
+        let mut szmethod: [u16; MAX_SYM_NAME as usize] = [0; MAX_SYM_NAME as usize];
+        let mut pchmethod = 0_u32;
+        let mut pdwattr = 0_u32;
+        let ppvsigblob = 0_u8;
+        let mut pcbsigblob = 0_u32;
+        let mut pulcoderva = 0_u32;
+        let mut pdwimplflags = 0_u32;
+
+        unsafe {
+            // メソッドのメタデータ取得
+            // https://learn.microsoft.com/ja-jp/dotnet/framework/unmanaged-api/metadata/imetadataimport-getmethodprops-method
+            pimport.GetMethodProps(
+                ptoken,
+                &mut pclass, 
+                Some(&mut szmethod), 
+                &mut pchmethod, 
+                &mut pdwattr, 
+                ppvsigblob as *mut *mut u8,
+                &mut pcbsigblob, 
+                &mut pulcoderva, 
+                &mut pdwimplflags
+            )?;
+        }
+
+        // 末尾のNULL文字削除
+        let filterd: Vec<u16> = szmethod.into_iter().filter(|x| *x != 0).collect();
+        let method_name = HSTRING::from_wide(&filterd);
+
+        let mut sztypedef: [u16; MAX_SYM_NAME as usize] = [0; MAX_SYM_NAME as usize];
+        let mut pchtypedef = 0_u32;
+        let mut pdwtypedefflags = 0_u32;
+        let mut ptkextends = 0_u32;
+ 
+       unsafe {
+            // メソッドが取得されているクラスのメタデータ取得
+            // https://learn.microsoft.com/ja-jp/dotnet/framework/unmanaged-api/metadata/imetadataimport-gettypedefprops-method
+            pimport.GetTypeDefProps(
+                pclass,
+                Some(&mut sztypedef),
+                &mut pchtypedef,
+                &mut pdwtypedefflags,
+                &mut ptkextends
+            )?;
+        }
+
+        // 末尾のNULL文字削除
+        let class_filterd: Vec<u16> = sztypedef.into_iter().filter(|x| *x != 0).collect();
+        let class_name = HSTRING::from_wide(&class_filterd);
+
+        if method_name == "ScanContent" {
+            // println!("sztypedef.szmethod: {}.{}", class_name, method_name);
+
+            let mut pclassid = 0_usize;
+            let mut pmoduleid = 0_usize;
+
+            unsafe {
+                // メソッドが定義されているモジュールのmoduleidが欲しい
+                self.get_profiler_info().unwrap().GetFunctionInfo(
+                    functionid,
+                    &mut pclassid,
+                    &mut pmoduleid,
+                    &mut ptoken
+                )?;
+            }
+
+            let mut ppmethodheader = std::ptr::null_mut();
+            let mut pcbmethodsize = 0_u32;
+
+            unsafe {
+                self.get_profiler_info().unwrap().GetILFunctionBody(
+                    pmoduleid, 
+                    ptoken, 
+                    &mut ppmethodheader, 
+                    &mut pcbmethodsize
+                )?;
+            }
+
+            println!("ptoken: {}", ptoken);
+            let il_bytes = unsafe { std::slice::from_raw_parts(ppmethodheader, pcbmethodsize as usize) };
+            let il_method = unsafe { *(il_bytes.as_ptr() as *const IMAGE_COR_ILMETHOD) };
+            // println!("{:?}", unsafe { il_method.Fat } );
+
+            let fat_header_size = size_of::<IMAGE_COR_ILMETHOD_FAT>();
+            let mut cloned_header = il_method.clone();
+            let new_il:[u8;6] = [
+                0x20, 0x00, // push 0 to stack top
+                0x20, 0x00, // push 0 to stack top
+                0x61,       // xor
+                0x2a, // ret
+            ];
+
+            cloned_header.Fat.CodeSize = new_il.len() as u32;
+
+            let total_size = fat_header_size + new_il.len();
+
+            let method_alloc = unsafe { self.get_profiler_info().unwrap().GetILFunctionBodyAllocator(pmoduleid)? };
+            let allocated = unsafe { method_alloc.Alloc(total_size as u32) as *mut u8 };
+
+            let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_FAT>()] = unsafe { std::mem::transmute(cloned_header.Fat) };
+
+            unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, fat_header_size) } ;
+            unsafe { std::ptr::copy_nonoverlapping(new_il.as_ptr(), allocated.add(a1.len()), new_il.len()) };
+
+            unsafe{ 
+                let r = self.get_profiler_info().unwrap()
+                    .SetILFunctionBody(pmoduleid, ptoken, allocated);
+                if r.is_err() {
+                    println!("{:?}", r);
+                }
+            };
+        }
+
+        Ok(())
+    }
+
+    fn AssemblyLoadFinished(&self, assemblyid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+        let pcchname = 0_u32;
+        let mut szname: [u16; MAX_PATH as usize] = [0; MAX_PATH as usize];
+        let mut pappdomainid = 0_usize;
+        let mut pmoduleid = 0_usize;
+
+        unsafe {
+            // assemblyidからロードしたアセンブリの情報を取得する
+            // https://learn.microsoft.com/ja-jp/dotnet/framework/unmanaged-api/profiling/icorprofilerinfo-getassemblyinfo-method
+            self.get_profiler_info().unwrap().GetAssemblyInfo(
+                assemblyid,
+                pcchname as *mut u32, 
+                &mut szname, 
+                &mut pappdomainid, 
+                &mut pmoduleid
+            )?;
+        }
+
+        let assembly_name = &HSTRING::from_wide(&szname);
+
+        let _debug_info = format!("assemblyid: {:x}\nszname: {}\npappdomainid: {:x},\npmoduleid: {:x}",
+            assemblyid,
+            assembly_name,
+            pappdomainid,
+            pmoduleid, 
+        );
+        //println!("{}", debug_info);
+
         Ok(())
     }
 
@@ -100,19 +260,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 
-    fn AssemblyLoadStarted(&self, __assemblyid: usize) -> windows_core::Result<()> {
-            unsafe {
-        MessageBoxW(
-            None,
-            w!("test"),
-            w!("title"),
-            Default::default(),
-        );
-    }
-        Ok(())
-    }
-
-    fn AssemblyLoadFinished(&self, _assemblyid: usize, _hrstatus: windows_core::HRESULT) -> windows_core::Result<()> {
+    fn AssemblyLoadStarted(&self, _assemblyid: usize) -> windows_core::Result<()> {
         Ok(())
     }
 
@@ -161,10 +309,6 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     }
 
     fn FunctionUnloadStarted(&self, _functionid: usize) -> windows_core::Result<()> {
-        Ok(())
-    }
-
-    fn JITCompilationStarted(&self, _functionid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
