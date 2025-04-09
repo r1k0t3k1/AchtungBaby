@@ -19,6 +19,11 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --release
     - name: Run tests
       run: cargo test --verbose
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: DLL
+        path: ./target/release/actung_baby.dll
