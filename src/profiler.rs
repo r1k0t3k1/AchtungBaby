@@ -6,7 +6,7 @@ use windows::Win32::System::Diagnostics::ClrProfiling::{
     ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
 };
 use windows::Win32::System::Diagnostics::Debug::MAX_SYM_NAME;
-use windows::Win32::System::WinRT::Metadata::{IMetaDataImport2, IMAGE_COR_ILMETHOD, IMAGE_COR_ILMETHOD_FAT};
+use windows::Win32::System::WinRT::Metadata::{IMetaDataImport2, IMAGE_COR_ILMETHOD, IMAGE_COR_ILMETHOD_FAT, IMAGE_COR_ILMETHOD_TINY};
 
 use crate::util::Logger;
 
@@ -184,7 +184,8 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
             println!("ptoken: {}", ptoken);
             let il_bytes = unsafe { std::slice::from_raw_parts(ppmethodheader, pcbmethodsize as usize) };
             let il_method = unsafe { *(il_bytes.as_ptr() as *const IMAGE_COR_ILMETHOD) };
-            // println!("{:?}", unsafe { il_method.Fat } );
+            println!("FAT: {:?}", unsafe { il_method.Fat } );
+            println!("TINY: {:?}", unsafe { il_method.Tiny } );
 
             let fat_header_size = size_of::<IMAGE_COR_ILMETHOD_FAT>();
             let mut cloned_header = il_method.clone();
@@ -196,15 +197,19 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
             ];
 
             cloned_header.Fat.CodeSize = new_il.len() as u32;
+            cloned_header.Tiny = IMAGE_COR_ILMETHOD_TINY::default();
+            cloned_header.Tiny.Flags_CodeSize = 0b001010_u8;
 
             let total_size = fat_header_size + new_il.len();
 
             let method_alloc = unsafe { self.get_profiler_info().unwrap().GetILFunctionBodyAllocator(pmoduleid)? };
             let allocated = unsafe { method_alloc.Alloc(total_size as u32) as *mut u8 };
 
-            let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_FAT>()] = unsafe { std::mem::transmute(cloned_header.Fat) };
-
-            unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, fat_header_size) } ;
+            //let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_FAT>()] = unsafe { std::mem::transmute(cloned_header.Fat) };
+            let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_TINY>()] = unsafe { std::mem::transmute(cloned_header.Tiny) };
+            println!("a1: {:?}", a1);
+            //unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, fat_header_size) } ;
+            unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, size_of::<IMAGE_COR_ILMETHOD_TINY>()) } ;
             unsafe { std::ptr::copy_nonoverlapping(new_il.as_ptr(), allocated.add(a1.len()), new_il.len()) };
 
             unsafe{ 
