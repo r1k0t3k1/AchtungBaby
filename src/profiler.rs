@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::sync::OnceLock;
 
 use windows::core::*;
@@ -51,6 +52,7 @@ impl AchtungBabyProfiler {
     fn get_profiler_info(&self) -> Option<&ICorProfilerInfo3> {
         self.profiler_info.get()
     }
+
     fn get_function_info(&self, functionid: usize) -> windows_core::Result<(String, u32)> {
         let mut ppimport:Option<IUnknown> = None; 
         let mut ptoken = 0_u32;  // GetMethodPropsに渡すようのメタデータトークン
@@ -145,9 +147,7 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
     }
 
     fn Shutdown(&self) -> windows_core::Result<()> {
-        ("shutdown called");
-        // ICorProfilerInfoの解放
-        //*self.profiler_info.borrow_mut() = None;
+        println!("ICorProfilerCallback::shutdown");
         Ok(())
     }
 
@@ -155,71 +155,59 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         let (method_name, ptoken) = self.get_function_info(functionid)?;
         let mut ptoken = ptoken;
 
-        if method_name == "System.Management.Automation.AmsiUtils.ScanContent" {
-            let mut pclassid = 0_usize;
-            let mut pmoduleid = 0_usize;
+        if method_name != "System.Management.Automation.AmsiUtils.ScanContent" {
+            return Ok(());
+        };
 
-            unsafe {
-                // メソッドが定義されているモジュールのmoduleidが欲しい
-                self.get_profiler_info().unwrap().GetFunctionInfo(
-                    functionid,
-                    &mut pclassid,
-                    &mut pmoduleid,
-                    &mut ptoken
-                )?;
-            }
+        let mut pclassid = 0_usize;
+        let mut pmoduleid = 0_usize;
 
-            let mut ppmethodheader = std::ptr::null_mut();
-            let mut pcbmethodsize = 0_u32;
-
-            unsafe {
-                self.get_profiler_info().unwrap().GetILFunctionBody(
-                    pmoduleid, 
-                    ptoken, 
-                    &mut ppmethodheader, 
-                    &mut pcbmethodsize
-                )?;
-            }
-
-            println!("ptoken: {}", ptoken);
-            let il_bytes = unsafe { std::slice::from_raw_parts(ppmethodheader, pcbmethodsize as usize) };
-            let il_method = unsafe { *(il_bytes.as_ptr() as *const IMAGE_COR_ILMETHOD) };
-            println!("FAT: {:?}", unsafe { il_method.Fat } );
-            println!("TINY: {:?}", unsafe { il_method.Tiny } );
-
-            let fat_header_size = size_of::<IMAGE_COR_ILMETHOD_FAT>();
-            let mut cloned_header = il_method.clone();
-
-            // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.emit.opcodes?view=net-9.0
-            let new_il:[u8;2] = [
-                0x16,  // push 0 to stack top
-                0x2a, // ret
-            ];
-
-            cloned_header.Fat.CodeSize = new_il.len() as u32;
-            cloned_header.Tiny = IMAGE_COR_ILMETHOD_TINY::default();
-            cloned_header.Tiny.Flags_CodeSize = 0b001010_u8;
-
-            let total_size = fat_header_size + new_il.len();
-
-            let method_alloc = unsafe { self.get_profiler_info().unwrap().GetILFunctionBodyAllocator(pmoduleid)? };
-            let allocated = unsafe { method_alloc.Alloc(total_size as u32) as *mut u8 };
-
-            //let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_FAT>()] = unsafe { std::mem::transmute(cloned_header.Fat) };
-            let a1: [u8; size_of::<IMAGE_COR_ILMETHOD_TINY>()] = unsafe { std::mem::transmute(cloned_header.Tiny) };
-            println!("a1: {:?}", a1);
-            //unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, fat_header_size) } ;
-            unsafe { std::ptr::copy_nonoverlapping(a1.as_ptr(), allocated, size_of::<IMAGE_COR_ILMETHOD_TINY>()) } ;
-            unsafe { std::ptr::copy_nonoverlapping(new_il.as_ptr(), allocated.add(a1.len()), new_il.len()) };
-
-            unsafe{ 
-                let r = self.get_profiler_info().unwrap()
-                    .SetILFunctionBody(pmoduleid, ptoken, allocated);
-                if r.is_err() {
-                    println!("{:?}", r);
-                }
-            };
+        unsafe {
+            // メソッドが定義されているモジュールのmoduleidが欲しい
+            self.get_profiler_info().unwrap().GetFunctionInfo(
+                functionid,
+                &mut pclassid,
+                &mut pmoduleid,
+                &mut ptoken
+            )?;
         }
+
+        let mut ppmethodheader = std::ptr::null_mut();
+        let mut pcbmethodsize = 0_u32;
+
+        unsafe {
+            self.get_profiler_info().unwrap().GetILFunctionBody(
+                pmoduleid, 
+                ptoken, 
+                &mut ppmethodheader, 
+                &mut pcbmethodsize
+            )?;
+        }
+
+        println!("ptoken: {}", ptoken);
+
+        // 新しいILMethodを定義
+        // TINYヘッダの場合は先頭1byte?でTINYであることとコードサイズを表現
+        // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.emit.opcodes?view=net-9.0
+        let new_il:[u8; 3] = [
+            0b00001010, // tiny method header and code size
+            0x16,  // push 0 to stack top
+            0x2a, // ret
+        ];
+
+        let method_alloc = unsafe { self.get_profiler_info().unwrap().GetILFunctionBodyAllocator(pmoduleid)? };
+        let allocated = unsafe { method_alloc.Alloc(new_il.len() as u32) as *mut u8 };
+
+        unsafe { std::ptr::copy_nonoverlapping(new_il.as_ptr(), allocated, new_il.len()) } ;
+
+        unsafe{ 
+            // ILの本体を差すポインタを上書きする
+            let r = self.get_profiler_info().unwrap()
+                .SetILFunctionBody(pmoduleid, ptoken, allocated);
+            if r.is_err() {
+                println!("{:?}", r);
+            }
+        };
 
         Ok(())
     }

@@ -44,7 +44,7 @@ impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
                 true  => println!("[+] AchtungBabyProfiler::query succeeded: {:?}", result.message()),
                 false => println!("[-] AchtungBabyProfiler::query failed: {:?}", result.message()),
             }
-            //unsafe { ICorProfilerCallback2::from_raw(*ppvobject).Initialize(None);}
+
             result.ok()
         }
     }
