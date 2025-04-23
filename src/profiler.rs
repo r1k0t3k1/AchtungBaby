@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use windows::core::*;
 use windows::Win32::Foundation::{E_UNEXPECTED, MAX_PATH};
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
+    ICorProfilerCallback, ICorProfilerCallback10_Impl, ICorProfilerCallback11_Impl, ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback6, ICorProfilerCallback6_Impl, ICorProfilerCallback7_Impl, ICorProfilerCallback8_Impl, ICorProfilerCallback9_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO, COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES
 };
 use windows::Win32::System::Diagnostics::Debug::MAX_SYM_NAME;
 use windows::Win32::System::WinRT::Metadata::{IMetaDataImport2, IMAGE_COR_ILMETHOD, IMAGE_COR_ILMETHOD_FAT, IMAGE_COR_ILMETHOD_TINY};
@@ -606,8 +606,53 @@ impl ICorProfilerCallback4_Impl for AchtungBabyProfiler_Impl {
         Ok(())
     }
 }
+
 impl ICorProfilerCallback5_Impl for AchtungBabyProfiler_Impl {
     fn ConditionalWeakTableElementReferences(&self, _crootrefs: u32, _keyrefids: *const usize, _valuerefids: *const usize, _rootids: *const usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback6_Impl for AchtungBabyProfiler_Impl {
+    fn GetAssemblyReferences(&self, wszassemblypath: &windows_core::PCWSTR, pasmrefprovider: windows_core::Ref<'_, windows::Win32::System::Diagnostics::ClrProfiling::ICorProfilerAssemblyReferenceProvider>) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback7_Impl for AchtungBabyProfiler_Impl {
+    fn ModuleInMemorySymbolsUpdated(&self, moduleid: usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback8_Impl for AchtungBabyProfiler_Impl {
+    fn DynamicMethodJITCompilationStarted(&self, functionid: usize, fissafetoblock: windows_core::BOOL, pilheader: *const u8, cbilheader: u32) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn DynamicMethodJITCompilationFinished(&self, functionid: usize, hrstatus: windows_core::HRESULT, fissafetoblock: windows_core::BOOL) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback9_Impl for AchtungBabyProfiler_Impl {
+    fn DynamicMethodUnloaded(&self, functionid: usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback10_Impl for AchtungBabyProfiler_Impl {
+    fn EventPipeEventDelivered(&self, provider: usize, eventid: u32, eventversion: u32, cbmetadatablob: u32, metadatablob: *const u8, cbeventdata: u32, eventdata: *const u8, pactivityid: *const windows_core::GUID, prelatedactivityid: *const windows_core::GUID, eventthread: usize, numstackframes: u32, stackframes: *const usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn EventPipeProviderCreated(&self, provider: usize) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl ICorProfilerCallback11_Impl for AchtungBabyProfiler_Impl {
+    fn LoadAsNotificationOnly(&self, pbnotificationonly: *mut windows_core::BOOL) -> windows_core::Result<()> {
         Ok(())
     }
 }
