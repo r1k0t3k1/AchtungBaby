@@ -1,6 +1,6 @@
+use capstone::prelude::*;
 use std::fs::OpenOptions;
 use std::io::Write;
-use capstone::prelude::*;
 
 use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
 use windows::Win32::UI::WindowsAndMessaging::MessageBoxW;
@@ -12,12 +12,9 @@ const LOG_FILE: &str = r"C:\Temp\AchthungBaby.log";
 
 impl Logger {
     pub fn log_to_file(message: &str) {
-        if let Ok(mut f) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(LOG_FILE) {
-                let _ = writeln!(f, "{}", message);
-            }
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(LOG_FILE) {
+            let _ = writeln!(f, "{}", message);
+        }
     }
 
     pub fn log_to_debugger(message: &str) {
@@ -31,12 +28,7 @@ impl Logger {
         let title = w!("AchtungBaby Debug message");
         let wide_msg = HSTRING::from(message);
         unsafe {
-            MessageBoxW(
-                None,
-                &wide_msg,
-                title,
-                Default::default(),
-            );
+            MessageBoxW(None, &wide_msg, title, Default::default());
         }
     }
 
@@ -53,7 +45,8 @@ impl Logger {
             .unwrap()
             .as_ref()
             .iter()
-            .for_each(|i| { println!("{}", i); });
-        
+            .for_each(|i| {
+                println!("{}", i);
+            });
     }
 }

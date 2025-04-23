@@ -1,15 +1,13 @@
-use profiler::CLSID_PROFILER;
-use windows::Win32::Foundation::{
-    CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, S_OK
-};
-use windows::Win32::System::Com::IClassFactory;
-use windows::core::{ HRESULT, GUID };
-use windows_core::Interface;
 use class_factory::AchtungBabyClassFactory;
 use core::ffi::c_void;
+use profiler::CLSID_PROFILER;
+use windows::core::{GUID, HRESULT};
+use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, S_OK};
+use windows::Win32::System::Com::IClassFactory;
+use windows_core::Interface;
 
-mod profiler;
 mod class_factory;
+mod profiler;
 mod util;
 
 // DLLロード時は特に何もしなくていいのでDllMainは定義し無くてもいい
@@ -36,12 +34,12 @@ extern "system" fn DllGetClassObject(
     rclsid: *const GUID,
     riid: *const GUID,
     ppv: *mut c_void,
-) -> HRESULT {      
+) -> HRESULT {
     if ppv.is_null() {
         return E_POINTER;
     }
     if rclsid.is_null() || riid.is_null() {
-        return E_INVALIDARG
+        return E_INVALIDARG;
     }
 
     let clsid = unsafe { *rclsid };
@@ -53,8 +51,8 @@ extern "system" fn DllGetClassObject(
     println!("[+] DllGetClassObject: CLSID={:?}, IID={:?}", clsid, iid);
 
     let factory: IClassFactory = IClassFactory::from(AchtungBabyClassFactory {});
-    unsafe { 
-        let result = factory.query(riid,  ppv as *mut *mut c_void);
+    unsafe {
+        let result = factory.query(riid, ppv as *mut *mut c_void);
         match result.is_ok() {
             true => println!("[+] IClassFacotry::query succeeded: {:?}", result.message()),
             false => println!("[-] IClassFacotry::query failed: {:?}", result.message()),

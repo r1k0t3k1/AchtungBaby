@@ -121,7 +121,7 @@ Invisi-Shellの`RunWithRegistryNonAdmin.bat`ではレジストリに`CLSID`や`I
 ILの書き換えにおいて重要なのは`ICorProfilerCallback::JITCompilationStarted`である
 
 ```c++
-HRESULT JITCompilationStarted( [in] FunctionID functionId, [in] BOOL fIsSafeToBlock);
+HRESULT JITCompilationStarted( [in]_functionid_functionid, [in] BOOL fIsSafeToBlock);
 ```
 
 [ICorProfilerCallback::JITCompilationStarted Method - .NET Framework | Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/framework/unmanaged-api/profiling/icorprofilercallback-jitcompilationstarted-method)
