@@ -3,12 +3,14 @@ use std::sync::OnceLock;
 use windows::core::*;
 use windows::Win32::Foundation::{E_UNEXPECTED, MAX_PATH};
 use windows::Win32::System::Diagnostics::ClrProfiling::{
-    ICorProfilerCallback, ICorProfilerCallback10_Impl, ICorProfilerCallback11_Impl,
-    ICorProfilerCallback2, ICorProfilerCallback2_Impl, ICorProfilerCallback3,
-    ICorProfilerCallback3_Impl, ICorProfilerCallback4, ICorProfilerCallback4_Impl,
-    ICorProfilerCallback5, ICorProfilerCallback5_Impl, ICorProfilerCallback6,
-    ICorProfilerCallback6_Impl, ICorProfilerCallback7_Impl, ICorProfilerCallback8_Impl,
-    ICorProfilerCallback9_Impl, ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO,
+    ICorProfilerCallback, ICorProfilerCallback10, ICorProfilerCallback10_Impl,
+    ICorProfilerCallback11, ICorProfilerCallback11_Impl, ICorProfilerCallback2,
+    ICorProfilerCallback2_Impl, ICorProfilerCallback3, ICorProfilerCallback3_Impl,
+    ICorProfilerCallback4, ICorProfilerCallback4_Impl, ICorProfilerCallback5,
+    ICorProfilerCallback5_Impl, ICorProfilerCallback6, ICorProfilerCallback6_Impl,
+    ICorProfilerCallback7, ICorProfilerCallback7_Impl, ICorProfilerCallback8,
+    ICorProfilerCallback8_Impl, ICorProfilerCallback9, ICorProfilerCallback9_Impl,
+    ICorProfilerCallback_Impl, ICorProfilerInfo3, COR_PRF_CODE_INFO,
     COR_PRF_MONITOR_ASSEMBLY_LOADS, COR_PRF_MONITOR_JIT_COMPILATION, COR_PRF_USE_PROFILE_IMAGES,
 };
 use windows::Win32::System::Diagnostics::Debug::MAX_SYM_NAME;
@@ -30,6 +32,12 @@ pub const CLSID_PROFILER: GUID = GUID::from_values(
 // ICorProfilerCallbackのIID:  176FBED1-A55C-4796-98CA-A9DA0EF883E7
 // ICorProfilerCallback2のIID: 8A8CC829-CCF2-49fe-BBAE-0F022228071A
 #[implement(
+    ICorProfilerCallback11,
+    ICorProfilerCallback10,
+    ICorProfilerCallback9,
+    ICorProfilerCallback8,
+    ICorProfilerCallback7,
+    ICorProfilerCallback6,
     ICorProfilerCallback5,
     ICorProfilerCallback4,
     ICorProfilerCallback3,
@@ -45,6 +53,23 @@ impl AchtungBabyProfiler {
         Self {
             profiler_info: OnceLock::new(),
         }
+    }
+
+    pub fn is_available_interface(iid: GUID) -> bool {
+        [
+            ICorProfilerCallback::IID,
+            ICorProfilerCallback2::IID,
+            ICorProfilerCallback3::IID,
+            ICorProfilerCallback4::IID,
+            ICorProfilerCallback5::IID,
+            ICorProfilerCallback6::IID,
+            ICorProfilerCallback7::IID,
+            ICorProfilerCallback8::IID,
+            ICorProfilerCallback9::IID,
+            ICorProfilerCallback10::IID,
+            ICorProfilerCallback11::IID,
+        ]
+        .contains(&iid)
     }
 
     fn set_profiler_info(&self, value: ICorProfilerInfo3) -> windows_core::Result<()> {
@@ -151,8 +176,8 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
         unsafe {
             self.get_profiler_info().unwrap().SetEventMask(
                 COR_PRF_MONITOR_ASSEMBLY_LOADS.0 as u32 | // アセンブリの読み込み通知を購読
-            COR_PRF_MONITOR_JIT_COMPILATION.0 as u32 |         // JITの開始通知を購読
-            COR_PRF_USE_PROFILE_IMAGES.0 as u32, // NGENにより予めJITコンパイルされたライブラリにおいてもJITコンパイルさせる
+                COR_PRF_MONITOR_JIT_COMPILATION.0 as u32 |         // JITの開始通知を購読
+                COR_PRF_USE_PROFILE_IMAGES.0 as u32,               // NGENにより予めJITコンパイルされたライブラリにおいてもJITコンパイルさせる
             )?
         };
 
@@ -268,9 +293,11 @@ impl ICorProfilerCallback_Impl for AchtungBabyProfiler_Impl {
             )?;
         }
 
+        println!("Native code at: {:x}, length: {:x}", codeinfos[0].startAddress, codeinfos[0].size);
         let bytes = unsafe {
             std::slice::from_raw_parts(codeinfos[0].startAddress as *const u8, codeinfos[0].size)
         };
+
         Logger::show_disasm(bytes);
         Ok(())
     }

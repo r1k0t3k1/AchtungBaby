@@ -3,9 +3,7 @@ use windows::Win32::{
     Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER},
     System::{
         Com::{IClassFactory, IClassFactory_Impl},
-        Diagnostics::ClrProfiling::{
-            ICorProfilerCallback, ICorProfilerCallback2, ICorProfilerCallback5,
-        },
+        Diagnostics::ClrProfiling::ICorProfilerCallback11,
     },
 };
 use windows_core::{implement, IUnknown, Interface, Ref, GUID};
@@ -39,11 +37,11 @@ impl IClassFactory_Impl for AchtungBabyClassFactory_Impl {
 
         let riid = unsafe { *riid };
 
-        if riid != ICorProfilerCallback::IID && riid != ICorProfilerCallback2::IID {
+        if !AchtungBabyProfiler::is_available_interface(riid) {
             return Err(E_NOINTERFACE.into());
         }
 
-        let profiler = ICorProfilerCallback5::from(AchtungBabyProfiler::new());
+        let profiler = ICorProfilerCallback11::from(AchtungBabyProfiler::new());
 
         if profiler.as_raw().is_null() {
             return Err(windows_core::Error::from_hresult(E_FAIL));
