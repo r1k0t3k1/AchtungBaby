@@ -19,6 +19,14 @@ jobs:
       - name: Build
         run: cargo build --release
 
+      - name: Upload build result
+        uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: |
+            ./run.bat
+            ./target/release/achtung_baby.dll
+
       - name: Release
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
